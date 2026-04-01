@@ -12,52 +12,139 @@ export const extractTextFromImage = async (imagePath) => {
   }
 };
 
-// Extremely naive extraction based on common keywords for a simulated environment
-// In reality, specific regexes for RC, Insurance, and PUC would be used
-export const parseOCRText = (text, docType) => {
-  const parsedData = {};
-  const lines = text.split('\n').map(l => l.toUpperCase().trim());
-  
-  if (docType === 'RC') {
-    // Attempt to extract Vehicle Number (e.g., MH 12 AB 1234)
-    const vehNumMatch = text.match(/[A-Z]{2}[-\s]?[0-9]{1,2}[-\s]?[A-Z]{1,2}[-\s]?[0-9]{4}/i);
-    if (vehNumMatch) parsedData.vehicleNumber = vehNumMatch[0].replace(/[-\s]/g, '');
-    else parsedData.vehicleNumber = "XX00XX0000"; // fallback fake extraction
-    
-    parsedData.ownerName = "JOHN DOE"; // fallback for demo purposes
-    // Try finding "NAME:"
-    const nameLine = lines.find(l => l.includes('NAME'));
-    if(nameLine) {
-        let parts = nameLine.split(/NAME[:\-]?/i);
-        if(parts[1]) parsedData.ownerName = parts[1].trim();
+export const parseOCRText = (text) => {
+  const result = {
+    document_type: null,
+    plate_number: null,
+    owner_name: null,
+    policy_number: null,
+    start_date: null,
+    expiry_date: null,
+    puc_number: null,
+    puc_expiry: null
+  };
+
+  if (!text) return result;
+
+  // STEP 1: Preprocess
+  const upperText = text.toUpperCase();
+
+  // STEP 2: Detect Document Type
+  if (upperText.includes("REGISTRATION CERTIFICATE") || upperText.includes("GOVERNMENT OF TAMIL NADU")) {
+    result.document_type = "RC";
+  } else if (upperText.includes("INSURANCE") || upperText.includes("ICICI LOMBARD")) {
+    result.document_type = "INSURANCE";
+  } else if (upperText.includes("PUC") || upperText.includes("EMISSION")) {
+    result.document_type = "PUC";
+  }
+
+  // STEP 3 & 4: Extract and Validate
+  const lines = upperText.split('\n').map(l => l.trim()).filter(Boolean);
+
+  const extractDates = (str) => {
+    // Looks for DD-MM-YYYY, DD/MM/YYYY, DD-MMM-YYYY
+    const dateRegex = /\b(\d{1,2})[-\/](\d{1,2}|[A-Z]{3})[-\/](\d{4})\b/g;
+    const matches = str.matchAll(dateRegex);
+    const validDates = [];
+    for (const match of matches) {
+      let [full, d, m, y] = match;
+      if (m.length === 3) {
+        const months = {JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
+        m = months[m] !== undefined ? months[m] + 1 : 1;
+      }
+      const parsedDate = new Date(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+      if (!isNaN(parsedDate)) {
+        validDates.push(parsedDate);
+      }
     }
-  } else if (docType === 'INSURANCE') {
-    parsedData.policyNumber = "POL" + Math.floor(Math.random() * 1000000); // Random fallback
-    const policyLine = lines.find(l => l.includes('POLICY NO') || l.includes('POLICY'));
-    if(policyLine) {
-       const parts = policyLine.split(/[#:]/);
-       if(parts[1]) parsedData.policyNumber = parts[1].trim();
+    return validDates.sort((a, b) => a - b);
+  };
+
+  const dates = extractDates(upperText);
+
+  const extractPlateNumber = (str) => {
+    const words = str.replace(/[-\s_]/g, '').split(/[^\w]/);
+    for (let word of words) {
+      if (word.length >= 9 && word.length <= 11) {
+         let prefix = word.substring(0, 2);
+         let m1 = word.substring(2, 4).replace(/O/g, '0').replace(/I/g, '1').replace(/S/g, '5');
+         let mid = word.substring(4, 6);
+         let end = word.substring(6).replace(/O/g, '0').replace(/I/g, '1').replace(/S/g, '5');
+         
+         const candidate = prefix + m1 + mid + end;
+         if (/^[A-Z]{2}[0-9]{2}[A-Z]{2}[0-9]{4}$/.test(candidate)) {
+             return candidate;
+         }
+      }
+    }
+    return null;
+  };
+
+  if (result.document_type === "RC") {
+    result.plate_number = extractPlateNumber(upperText);
+    
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i];
+        if (line.includes("NAME")) {
+            let parts = line.split(/NAME\s*[:\-]?\s*/);
+            if (parts.length > 1 && parts[1].length > 2) {
+                result.owner_name = parts[1].trim();
+                break;
+            }
+            if (i + 1 < lines.length) {
+                result.owner_name = lines[i + 1].trim(); 
+                break;
+            }
+        }
+    }
+    if (result.owner_name) {
+       result.owner_name = result.owner_name.replace(/[^A-Z\s]/g, '').trim();
+       if (!result.owner_name) result.owner_name = null;
     }
 
-    parsedData.insuranceStartDate = new Date(new Date().setFullYear(new Date().getFullYear() - 1)).toISOString().split('T')[0];
-    parsedData.insuranceExpiryDate = new Date().toISOString().split('T')[0]; 
-    
-    // We try to extract DD/MM/YYYY or DD-MM-YYYY
-    const dates = text.match(/\d{2}[\/\-]\d{2}[\/\-]\d{4}/g);
-    if(dates && dates.length >= 2) {
-       // Just taking the first two as start and expiry for a simple assumption
-       parsedData.insuranceStartDate = new Date(dates[0].split(/[/-]/).reverse().join('-')).toISOString().split('T')[0];
-       parsedData.insuranceExpiryDate = new Date(dates[1].split(/[/-]/).reverse().join('-')).toISOString().split('T')[0];
+  } else if (result.document_type === "INSURANCE") {
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i];
+        if (line.includes("POLICY") || line.includes("POL NO")) {
+            const parts = line.split(/POLICY( NO)?\s*[:\-#]?\s*/);
+            const val = parts[parts.length - 1].trim();
+            if (val && val.length > 4) {
+                result.policy_number = val.replace(/\s+/g, '');
+                break;
+            }
+            if (i + 1 < lines.length) {
+                result.policy_number = lines[i + 1].replace(/\s+/g, '');
+                break;
+            }
+        }
     }
-  } else if (docType === 'PUC') {
-    parsedData.pucNumber = "PUC" + Math.floor(Math.random() * 10000);
-    parsedData.pucExpiryDate = new Date().toISOString().split('T')[0];
     
-    const dates = text.match(/\d{2}[\/\-]\d{2}[\/\-]\d{4}/g);
-    if(dates && dates.length >= 1) {
-       parsedData.pucExpiryDate = new Date(dates[dates.length-1].split(/[/-]/).reverse().join('-')).toISOString().split('T')[0];
+    if (dates.length >= 2) {
+      result.start_date = dates[0].toISOString().split('T')[0];
+      result.expiry_date = dates[dates.length - 1].toISOString().split('T')[0];
+    } else if (dates.length === 1) {
+      result.start_date = dates[0].toISOString().split('T')[0];
+    }
+  } else if (result.document_type === "PUC") {
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i];
+        if (line.includes("CERTIFICATE NO") || line.includes("PUC NO")) {
+            const parts = line.split(/(CERTIFICATE|PUC) NO\s*[:\-#]?\s*/);
+            const val = parts[parts.length - 1].trim();
+            if (val && val.length > 2) {
+                result.puc_number = val.replace(/\s+/g, '');
+                break;
+            }
+            if (i + 1 < lines.length) {
+                result.puc_number = lines[i + 1].replace(/\s+/g, '');
+                break; 
+            }
+        }
+    }
+    if (dates.length >= 1) {
+      result.puc_expiry = dates[dates.length - 1].toISOString().split('T')[0];
     }
   }
 
-  return parsedData;
+  return result;
 };

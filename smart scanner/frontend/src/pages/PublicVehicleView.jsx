@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
+import API_BASE_URL from '../config';
 import { ShieldCheck, AlertTriangle, XCircle, FileText, Car, User, Calendar, Download, Eye, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -13,8 +14,7 @@ const PublicVehicleView = () => {
    useEffect(() => {
       const fetchVehicle = async () => {
          try {
-            const API_URL = `http://${window.location.hostname}:5000`;
-            const { data } = await axios.get(`${API_URL}/api/vehicles/public/${id}`);
+            const { data } = await axios.get(`${API_BASE_URL}/api/vehicles/public/${id}`);
             setVehicle(data);
          } catch (err) {
             setError(err.response?.data?.message || 'Vehicle record not found.');
@@ -108,7 +108,7 @@ const PublicVehicleView = () => {
    const renderDocCard = (title, date, imagePath) => {
       const docStatus = getDocStatus(date);
       const isExpired = docStatus === 'Expired';
-      const imageURL = `http://${window.location.hostname}:5000/${imagePath}`;
+      const imageURL = `${API_BASE_URL}/${imagePath}`;
 
       return (
          <div style={{

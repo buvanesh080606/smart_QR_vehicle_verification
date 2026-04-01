@@ -4,6 +4,7 @@ import { QRCodeCanvas } from 'qrcode.react';
 import { Download, Share2, Check, ArrowLeft, ShieldCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
 import axios from 'axios';
+import API_BASE_URL from '../config';
 import { AuthContext } from '../context/AuthContext';
 
 const QRCodePage = () => {
@@ -16,7 +17,7 @@ const QRCodePage = () => {
   useEffect(() => {
     const fetchVehicle = async () => {
       try {
-        const { data } = await axios.get(`http://${window.location.hostname}:5000/api/vehicles/${id}`, {
+        const { data } = await axios.get(`${API_BASE_URL}/api/vehicles/${id}`, {
           headers: { Authorization: `Bearer ${user?.token}` }
         });
         setVehicle(data);
@@ -121,7 +122,18 @@ const QRCodePage = () => {
               }} />
             ))}
             <QRCodeCanvas
-              value={window.location.hostname === 'localhost' ? vehicle.qrCodeURL : `${window.location.origin}/vehicle/${id}`}
+              value={(() => {
+                // Always produce a network-accessible URL (not localhost)
+                // so any mobile device can scan and open it
+                try {
+                  const apiHostname = new URL(API_BASE_URL).hostname;
+                  const frontendPort = window.location.port || '5173';
+                  const protocol = window.location.protocol;
+                  return `${protocol}//${apiHostname}:${frontendPort}/vehicle/${id}`;
+                } catch {
+                  return `${window.location.origin}/vehicle/${id}`;
+                }
+              })()}
               size={220} level="H" includeMargin={false}
             />
           </motion.div>

@@ -1,6 +1,7 @@
 import { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import API_BASE_URL from '../config';
 import { AuthContext } from '../context/AuthContext';
 import { UploadCloud, CheckCircle, FileText, AlertCircle, Loader2, Sparkles, X, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -38,7 +39,7 @@ const UploadDocuments = () => {
     formData.append('insurance', files.insurance);
     formData.append('puc', files.puc);
     try {
-      const { data } = await axios.post(`http://${window.location.hostname}:5000/api/vehicles/uploadDocuments`, formData, {
+      const { data } = await axios.post(`${API_BASE_URL}/api/vehicles/uploadDocuments`, formData, {
         headers: { Authorization: `Bearer ${user.token}` }
       });
       setExtractedData(data.data);
@@ -53,7 +54,7 @@ const UploadDocuments = () => {
     e.preventDefault();
     setError('');
     try {
-      const { data } = await axios.post(`http://${window.location.hostname}:5000/api/vehicles/registerVehicle`, extractedData, {
+      const { data } = await axios.post(`${API_BASE_URL}/api/vehicles/registerVehicle`, extractedData, {
         headers: { Authorization: `Bearer ${user.token}` }
       });
 // LocalStorage logic removed. Server handles data isolation.

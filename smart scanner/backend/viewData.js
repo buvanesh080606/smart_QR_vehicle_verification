@@ -4,6 +4,7 @@ import User from './models/User.js';
 import Vehicle from './models/Vehicle.js';
 import dotenv from 'dotenv';
 
+
 dotenv.config();
 
 const displayData = async () => {

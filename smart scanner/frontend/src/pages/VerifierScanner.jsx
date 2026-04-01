@@ -27,18 +27,17 @@ const PoliceScanner = () => {
           const vehicleID = parts.pop(); 
           
           if (vehicleID) {
-            navigate(`/verify/${vehicleID}`);
+            navigate(`/vehicle/${vehicleID}`);
           } else {
             // Fallback: use the whole normalized value if pop failed
-            navigate(`/verify/${normalizedValue}`);
+            navigate(`/vehicle/${normalizedValue}`);
           }
         } catch (e) {
-          // Fallback: if URL parsing fails, just try the raw value
-          navigate(`/verify/${normalizedValue}`);
+          navigate(`/vehicle/${normalizedValue}`);
         }
       } else {
         // Assume rawValue is the ID or Plate Number
-        navigate(`/verify/${normalizedValue}`);
+        navigate(`/vehicle/${normalizedValue}`);
       }
     }
   };
@@ -176,7 +175,7 @@ const PoliceScanner = () => {
         <button 
           onClick={() => {
             const val = prompt("Enter Vehicle Plate Number:");
-            if (val) navigate(`/verify/${val.replace(/\s/g, '').toUpperCase()}`);
+            if (val) navigate(`/vehicle/${val.replace(/\s/g, '').toUpperCase()}`);
           }}
           style={{
             flex: 1,

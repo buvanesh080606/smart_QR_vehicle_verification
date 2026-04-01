@@ -1,6 +1,7 @@
 import { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
+import API_BASE_URL from '../config';
 import { AuthContext } from '../context/AuthContext';
 import { ShieldCheck, Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -19,7 +20,7 @@ const Login = () => {
     setLoading(true);
     setError('');
     try {
-      const { data } = await axios.post(`http://${window.location.hostname}:5000/api/auth/login`, { email, password });
+      const { data } = await axios.post(`${API_BASE_URL}/api/auth/login`, { email, password });
       login(data);
       navigate(data.role === 'police' ? '/scanner' : '/dashboard');
     } catch (err) {

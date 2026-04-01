@@ -1,6 +1,7 @@
 import { useEffect, useState, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
+import API_BASE_URL from '../config';
 import { AuthContext } from '../context/AuthContext';
 import { PlusCircle, QrCode, Car, Calendar, ChevronRight, FileCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -18,7 +19,7 @@ const OwnerDashboard = () => {
   useEffect(() => {
     const fetchVehicles = async () => {
       try {
-        const { data } = await axios.get(`http://${window.location.hostname}:5000/api/vehicles`, {
+        const { data } = await axios.get(`${API_BASE_URL}/api/vehicles`, {
           headers: { Authorization: `Bearer ${user?.token}` }
         });
         setVehicles(data);

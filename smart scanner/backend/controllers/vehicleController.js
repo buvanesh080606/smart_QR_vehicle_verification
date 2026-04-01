@@ -4,30 +4,15 @@ import crypto from 'crypto';
 import os from 'os';
 
 const getLocalIP = () => {
-  const nets = os.networkInterfaces();
-  let selectedIP = 'localhost';
-
-  // Priority list of common interface names for physical network cards
-  const priorityMatch = ['wi-fi', 'ethernet', 'wlan', 'en0', 'eth0'];
-
-  for (const name of Object.keys(nets)) {
-    const isPriority = priorityMatch.some(p => name.toLowerCase().includes(p));
-    
-    for (const net of nets[name]) {
-      // IPv4, not internal, and skip virtual interfaces from common software like WSL, VirtualBox, VMWare
-      if (net.family === 'IPv4' && !net.internal) {
-        const isVirtual = name.toLowerCase().includes('vbox') || 
-                          name.toLowerCase().includes('virtual') || 
-                          name.toLowerCase().includes('wsl');
-        
-        if (!isVirtual) {
-          if (isPriority) return net.address; // Immediate return for physical cards
-          selectedIP = net.address;
-        }
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
       }
     }
   }
-  return selectedIP;
+  return 'localhost';
 };
 
 const calculateStatus = (vehicle) => {
@@ -58,33 +43,32 @@ export const uploadDocuments = async (req, res) => {
     for (const [key, fileArray] of Object.entries(files)) {
       const file = fileArray[0];
       const text = await extractTextFromImage(file.path);
-      const parsed = parseOCRText(text, key.toUpperCase());
+      const parsed = parseOCRText(text);
 
       ocrResults[key] = {
         text, 
-        parsed: { ...parsed, type: key.toUpperCase() },
+        parsed: { ...parsed },
       };
     }
 
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const baseVehicleNum = ocrResults.rc?.parsed?.vehicleNumber && ocrResults.rc.parsed.vehicleNumber !== "XX00XX0000"
-      ? ocrResults.rc.parsed.vehicleNumber
-      : `MH12AB${randomSuffix}`;
+    const rcData = ocrResults.rc?.parsed || {};
+    const insData = ocrResults.insurance?.parsed || {};
+    const pucData = ocrResults.puc?.parsed || {};
+
+    const baseVehicleNum = rcData.plate_number ? rcData.plate_number : `MH12AB${Math.floor(1000 + Math.random() * 9000)}`;
 
     const autoFilledForm = {
       rcVehicleNumber: baseVehicleNum,
-      ownerName: ocrResults.rc?.parsed?.ownerName && ocrResults.rc.parsed.ownerName !== "JOHN DOE" 
-         ? ocrResults.rc.parsed.ownerName 
-         : req.user.name,
+      ownerName: rcData.owner_name || req.user.name,
 
-      insurancePolicy: ocrResults.insurance?.parsed?.policyNumber || 'INS001',
-      insuranceStartDate: ocrResults.insurance?.parsed?.insuranceStartDate || new Date().toISOString().split('T')[0],
-      insuranceExpiryDate: ocrResults.insurance?.parsed?.insuranceExpiryDate || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
-      insuranceVehicleNumber: ocrResults.insurance?.parsed?.vehicleNumber || baseVehicleNum,
+      insurancePolicy: insData.policy_number || 'INS001',
+      insuranceStartDate: insData.start_date || new Date().toISOString().split('T')[0],
+      insuranceExpiryDate: insData.expiry_date || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
+      insuranceVehicleNumber: baseVehicleNum,
 
-      pucNumber: ocrResults.puc?.parsed?.pucNumber || 'PUC001',
-      pucExpiryDate: ocrResults.puc?.parsed?.pucExpiryDate || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
-      pucVehicleNumber: ocrResults.puc?.parsed?.vehicleNumber || baseVehicleNum,
+      pucNumber: pucData.puc_number || 'PUC001',
+      pucExpiryDate: pucData.puc_expiry || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
+      pucVehicleNumber: baseVehicleNum,
 
       rcImage: req.files['rc']?.[0]?.path?.replace(/\\/g, '/'),
       insuranceImage: req.files['insurance']?.[0]?.path?.replace(/\\/g, '/'),
@@ -144,7 +128,14 @@ export const registerVehicle = async (req, res) => {
 
   const status = calculateStatus(vehicleData);
   vehicleData.status = status;
-  vehicleData.qrCodeURL = `http://${getLocalIP()}:5173/vehicle/${vehicleID}`;
+  
+  // Use FRONTEND_URL from environment for public accessible QR codes.
+  // Fallback to local network IP instead of localhost so mobiles can access it
+  if (!process.env.FRONTEND_URL) {
+    console.warn(`WARNING: FRONTEND_URL NOT SET. QR codes will default to local IP (${getLocalIP()}) to support mobile devices on the same network.`);
+  }
+  const frontendUrl = process.env.FRONTEND_URL || `http://${getLocalIP()}:5173`;
+  vehicleData.qrCodeURL = `${frontendUrl}/vehicle/${vehicleID}`;
 
   try {
     const vehicle = await Vehicle.create(vehicleData);
